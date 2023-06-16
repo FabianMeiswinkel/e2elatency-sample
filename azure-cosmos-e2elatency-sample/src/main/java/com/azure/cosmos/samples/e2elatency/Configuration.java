@@ -28,6 +28,15 @@ public class Configuration {
     @Parameter(names = {"-h", "-help", "--help"}, description = "Help", help = true)
     private boolean help = false;
 
+    @Parameter(names = "-diagnosticsSampling", description = "Diagnostics sampling rate (0, 1)")
+    private double diagnosticsSamplingRate = 1;
+
+    @Parameter(names = "-enableTransportLevelTracing", description = "Enable rntbd request level tracing")
+    private boolean enableTransportLevelTracing = false;
+
+    @Parameter(names = "-propertyCount", description = "Number of properties teh Json documents should have")
+    private int propertyCount = 20;
+
     public boolean isHelp() {
         return help;
     }
@@ -43,6 +52,12 @@ public class Configuration {
     public String getContainerId() { return this.containerId; }
 
     public String getPreferredRegions() { return this.preferredRegions; }
+
+    public double getDiagnosticsSamplingRate() { return this.diagnosticsSamplingRate; }
+
+    public boolean isTransportLevelTracingEnabled() { return this.enableTransportLevelTracing; }
+
+    public int getPropertyCount() { return this.propertyCount; }
 
     public void tryGetValuesFromSystem() {
         this.serviceEndpoint = StringUtils.defaultString(emptyToNull(System.getenv().get("COSMOS_SERVICE_ENDPOINT")),
@@ -62,6 +77,18 @@ public class Configuration {
 
         if (emptyToNull(System.getenv().get("CONCURRENCY")) != null) {
             this.concurrency = Integer.valueOf(System.getenv().get("CONCURRENCY"));
+        }
+
+        if (emptyToNull(System.getenv().get("COSMOS_PROPERTY_COUNT")) != null) {
+            this.propertyCount = Integer.valueOf(System.getenv().get("COSMOS_PROPERTY_COUNT"));
+        }
+
+        if (emptyToNull(System.getenv().get("COSMOS_DIAGNOSTICS_SAMPLING_RATE")) != null) {
+            this.diagnosticsSamplingRate = Double.valueOf(System.getenv().get("COSMOS_DIAGNOSTICS_SAMPLING_RATE"));
+        }
+
+        if (emptyToNull(System.getenv().get("COSMOS_TRANSPORT_TRACING_ENABLED")) != null) {
+            this.enableTransportLevelTracing = Boolean.valueOf(System.getenv().get("COSMOS_TRANSPORT_TRACING_ENABLED"));
         }
     }
 

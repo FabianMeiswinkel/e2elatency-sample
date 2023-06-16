@@ -6,10 +6,15 @@ package com.azure.cosmos.samples.e2elatency;
 import com.azure.cosmos.CosmosClient;
 import com.azure.cosmos.CosmosClientBuilder;
 import com.azure.cosmos.CosmosContainer;
+import com.azure.cosmos.CosmosContainerProactiveInitConfig;
+import com.azure.cosmos.CosmosContainerProactiveInitConfigBuilder;
 import com.azure.cosmos.CosmosDatabase;
 import com.azure.cosmos.CosmosException;
 import com.azure.cosmos.implementation.Database;
+import com.azure.cosmos.implementation.ImplementationBridgeHelpers;
 import com.azure.cosmos.implementation.guava25.collect.Lists;
+import com.azure.cosmos.models.CosmosClientTelemetryConfig;
+import com.azure.cosmos.models.CosmosContainerIdentity;
 import com.azure.cosmos.models.CosmosItemResponse;
 import com.azure.cosmos.models.PartitionKey;
 import com.azure.cosmos.models.ThroughputProperties;
@@ -19,6 +24,8 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.time.Duration;
+import java.util.Arrays;
 import java.util.Locale;
 import java.util.Scanner;
 import java.util.UUID;
@@ -45,9 +52,12 @@ public class Main {
             return;
         }
 
-        pool = Executors.newFixedThreadPool(cfg.getConcurrency());
+        pool = Executors.newFixedThreadPool(cfg.getConcurrency() + 2);
+
 
         Workload workload = new Workload(cfg);
+        Workload dummy1 = new Workload(cfg);
+        Workload dummy2 = new Workload(cfg);
         workload.init();
 
         for (int i = 0; i < cfg.getConcurrency(); i++) {
@@ -66,6 +76,9 @@ public class Main {
         } catch (InterruptedException e) {
             LOGGER.info("Could not shutdown gracefully...");
         }
+        if (dummy1 != null && dummy2 != null) {
+            LOGGER.info("Dummy");
+        }
         LOGGER.info("Good bye...");
     }
 
@@ -82,11 +95,27 @@ public class Main {
 
         public Workload(Configuration cfg) {
             this.cfg = cfg;
+
             CosmosClientBuilder clientBuilder = new CosmosClientBuilder()
                 .endpoint(cfg.getServiceEndpoint())
                 .key(cfg.getMasterKey())
-                .preferredRegions(Lists.newArrayList(cfg.getPreferredRegions().split(",")));
-            this.client = clientBuilder.buildClient();
+                .preferredRegions(Arrays.asList(cfg.getPreferredRegions().split(",")))
+                .openConnectionsAndInitCaches(
+                    new CosmosContainerProactiveInitConfigBuilder(Lists.newArrayList(new CosmosContainerIdentity(cfg.getDatabaseId(), cfg.getContainerId())))
+                        .setProactiveConnectionRegionsCount(1)
+                        .setAggressiveWarmupDuration(Duration.ofSeconds(10))
+                        .build());
+
+            CosmosClientTelemetryConfig telemetryCfg = new CosmosClientTelemetryConfig()
+                .sampleDiagnostics(cfg.getDiagnosticsSamplingRate());
+
+            if (cfg.isTransportLevelTracingEnabled()) {
+                telemetryCfg.enableTransportLevelTracing();
+            }
+
+            this.client = clientBuilder
+                .clientTelemetryConfig(telemetryCfg)
+                .buildClient();
             this.ids = new String[DOC_COUNT];
 
             for (int i = 0; i < DOC_COUNT; i++) {
@@ -107,7 +136,7 @@ public class Main {
 
             for (int i = 0; i < DOC_COUNT; i++) {
                 container.createItem(
-                    getDocumentDefinition(this.ids[i]),
+                    getDocumentDefinition(this.ids[i], cfg.getPropertyCount()),
                     new PartitionKey(this.ids[i]),
                     null
                 );
@@ -142,10 +171,10 @@ public class Main {
             LOGGER.info("Completed Thread {}", sequence);
         }
 
-        private static ObjectNode getDocumentDefinition(String id) {
+        private static ObjectNode getDocumentDefinition(String id, int propertyCount) {
             ObjectNode json = OBJECT_MAPPER.createObjectNode();
             json.put("id", id);
-            for (int i = 1; i <= 20; i++) {
+            for (int i = 1; i <= propertyCount; i++) {
                 json.put("Property" + String.valueOf(i), UUID.randomUUID().toString());
             }
 
