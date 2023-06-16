@@ -163,7 +163,7 @@ public class Main {
                     if (response.getStatusCode() != 200) {
                         LOGGER.error("Failure reading document {}: {}", id, response.getDiagnostics());
                     }
-                } catch (CosmosException error) {
+                } catch (Throwable error) {
                     LOGGER.error("Exception reading document {}: {}", id, error);
                 }
             }
